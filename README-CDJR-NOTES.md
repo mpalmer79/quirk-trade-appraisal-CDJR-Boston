@@ -1,4 +1,4 @@
-# Quirk CDJR Dorchester Trade Tool (cloned from Mazda)
+# Quirk CDJR Dorchester Trade Tool
 
 This repository was cloned from the Quirk Mazda trade tool and retargeted to **Quirk CDJR Dorchester**.
 Key changes performed automatically:
