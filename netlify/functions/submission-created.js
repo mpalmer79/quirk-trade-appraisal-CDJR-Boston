@@ -6,7 +6,7 @@ import sg from "@sendgrid/mail";
 // SENDGRID_API_KEY: Your SendGrid API key.
 // FROM_EMAIL: A verified sender email address in your SendGrid account.
 // TO_EMAIL: A comma-separated list of recipient email addresses.
-const TO_EMAILS = (process.env.TO_EMAIL || "steve@quirkcars.com").split(',');
+const TO_EMAILS = (process.env.TO_EMAIL || "steve@quirkcars.com,gmcintosh@quirkcars.com,lmendez@quirkcars.com").split(',');
 const FROM_EMAIL = process.env.FROM_EMAIL;
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 
@@ -81,27 +81,46 @@ export async function handler(event) {
 
 /**
  * Creates the subject, HTML body, and text body for the email.
+ * Adds Sales Consultant at the bottom if provided and omits internal fields.
  * @param {object} data - The form submission data.
  * @returns {{subject: string, htmlBody: string, textBody: string}}
  */
 function createEmailContent(data) {
-  const included = new Set(["form-name", "company", "bot-field", "honeypot"]);
+  // Fields we do NOT want to include in the table
+  const OMIT = new Set([
+    "form-name", "company", "bot-field", "honeypot",
+    "agree", "fieldOrder", "phoneRaw",
+    "referrer", "landingPage",
+    "utmSource", "utmMedium", "utmCampaign", "utmTerm", "utmContent"
+  ]);
+
   const rows = [];
   const hasVal = (v) => v !== undefined && v !== null && String(v).trim() !== "";
 
-  // Sort keys for consistent email layout
+  // Sort keys for consistent email layout, excluding omitted ones
   Object.keys(data).sort().forEach(k => {
-    if (included.has(k)) return;
+    if (OMIT.has(k)) return;
+    // we'll add salesConsultant manually at the bottom
+    if (k === "salesConsultant") return;
+
     const v = data[k];
     if (hasVal(v)) {
       rows.push([k, Array.isArray(v) ? v.join(", ") : String(v)]);
     }
   });
 
+  // Append Sales Consultant row LAST (with a friendly label) if present
+  if (hasVal(data.salesConsultant)) {
+    rows.push(["Sales Consultant", String(data.salesConsultant)]);
+  }
+
   const htmlEscape = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   const htmlBody = `
     <h2 style="margin:0 0 12px 0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;">New Trade-In Lead</h2>
+    <div style="margin:0 0 12px 0;color:#334155;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;">
+      ${(data.year || "")} ${(data.make || "")} ${(data.model || "")}
+    </div>
     <table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;">
       ${rows.map(([k, v]) => `
         <tr>
@@ -154,9 +173,7 @@ async function processAttachments(files) {
       totalSize += size;
 
       return {
-        // *** THIS IS THE FIX ***
-        // The original code had `Buffer.from(buffer)`, which is incorrect.
-        // `buffer` is already a Buffer, so we just need to Base64-encode it.
+        // buffer is already a Buffer – just Base64-encode it
         content: buffer.toString("base64"),
         filename: file.filename,
         type: file.type || "application/octet-stream",
